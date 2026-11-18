@@ -1,190 +1,127 @@
-# ✂ Fio Fino Barbearia — Ecossistema de Agendamento
+# ✂️ Barber AI Booking Platform — Intelligent Scheduling Ecosystem
 
-Site mobile-first + Secretária Virtual no WhatsApp (IA) + Painel administrativo, sobre **uma única API** e **um único banco**. Sem login, sem gateway de pagamento: o **WhatsApp do cliente é a identidade** dele em todo o sistema.
+[![Node.js](https://img.shields.io/badge/Node.js-22.13%2B-339933.svg?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![Express](https://img.shields.io/badge/Backend-Express.js-000000.svg?logo=express)](https://expressjs.com/)
+[![Meta WhatsApp API](https://img.shields.io/badge/Integration-WhatsApp%20Cloud%20API-25D366.svg?logo=whatsapp&logoColor=white)](https://developers.facebook.com/)
+[![LLM Tool Calling](https://img.shields.io/badge/AI%20Agent-LLM%20%2B%20Function%20Calling-FF6F00.svg)](https://openai.com/)
+[![Realtime](https://img.shields.io/badge/Sync-Server--Sent%20Events%20(SSE)-blueviolet.svg)](#arquitetura-do-sistema)
+[![Database](https://img.shields.io/badge/Database-SQLite%20(node%3Asqlite)-003B57.svg?logo=sqlite)](https://nodejs.org/api/sqlite.html)
+
+Ecossistema Full-Stack de agendamento em tempo real com **Agente de IA no WhatsApp** (Secretária Virtual autônoma), **Aplicação Web Mobile-First** e **Painel Administrativo de Gestão**, operando sobre uma **única API REST** e um **banco de dados transacional atômico**.
+
+Projetado com arquitetura *passwordless*: o **número de WhatsApp validado do cliente funciona como sua identidade global**, eliminando fricção de cadastro e autenticação.
+
+---
+
+## 🏗️ Arquitetura do Sistema
 
 ```mermaid
 flowchart LR
-    Site["Site (index.html)"] -->|REST| API
-    Painel["Painel (/painel)"] -->|REST + token admin| API
+    Site["Site Cliente (index.html)"] -->|REST| API
+    Painel["Painel Admin (/painel)"] -->|REST + Bearer Token| API
     WA["Cliente no WhatsApp"] -->|Webhook Meta| WH["/webhook/whatsapp"]
-    WH --> IA["Secretária (LLM + tools)"]
-    IA -->|REST + token interno| API
-    API["API Express"] --> DOM["services/agenda.js<br/>(regras únicas)"]
-    DOM --> DB[("SQLite")]
-    DOM -->|evento| SSE["/api/eventos (SSE)"]
-    SSE -->|tempo real| Site
-    SSE -->|tempo real| Painel
+    WH --> IA["Agente Virtual (LLM + Function Calling)"]
+    IA -->|REST + Token Interno| API
+    API["API Express"] --> DOM["services/agenda.js<br/>(Regras de Negócio Únicas)"]
+    DOM --> DB[("SQLite (Transações Atômicas)")]
+    DOM -->|Evento de Atualização| SSE["/api/eventos (SSE)"]
+    SSE -->|Sync em Tempo Real| Site
+    SSE -->|Sync em Tempo Real| Painel
 ```
 
-**Sincronização bidirecional:** todo agendamento (site, IA ou painel) passa por `services/agenda.js`, que grava no banco numa transação e publica um evento SSE. O site recarrega na hora a grade daquele barbeiro/dia, e a IA lê os agendamentos do cliente **ao vivo** a cada mensagem.
+### ⚡ Destaques de Engenharia e Concorrência
+
+* **Sincronização Bidirecional em Tempo Real via SSE**: Qualquer alteração na grade (feita no site, pelo WhatsApp ou no painel) dispara um evento **Server-Sent Events**. O site e o painel admin atualizam a disponibilidade dos barbeiros instantaneamente sem recarregar a página.
+* **Prevenção Concorrente de Double-Booking**: Regras unificadas em `services/agenda.js` com transações seriais que impedem marcações duplicadas no mesmo horário, mesmo que múltiplos clientes ou a IA tentem agendar simultaneamente.
+* **Agente de IA Autônomo com Function Calling**:
+  * O bot processa linguagem natural ("*muda meu corte de quinta para sexta às 10h*"), consulta a disponibilidade ao vivo via ferramentas (*tool calling*) e executa a remarcação de forma atômica.
+  * O WhatsApp do remetente é injetado pelo backend com validação criptográfica HMAC-SHA256 (`X-Hub-Signature-256`), garantindo que nenhum usuário altere agendamentos de terceiros.
+* **Node.js 22 com Driver SQLite Embutido**: Utilização do módulo nativo `node:sqlite`, eliminando dependências externas com compilação em C++ (`node-gyp`) e garantindo portabilidade imediata.
 
 ---
 
-## 🚀 Como rodar
+## 📁 Estrutura do Projeto
 
-Requer **Node.js 22.13+** (usa o SQLite embutido `node:sqlite`, sem compilação nativa).
+Barber-AI-Booking-Platform/ ├── public/ │ ├── index.html # Interface do cliente (Mobile-First) │ ├── painel.html # Dashboard administrativo │ ├── css/ # Estilização com Dark Neon e Glassmorphism │ ├── js/ # Camada cliente e listeners de SSE │ └── assets/ # Imagens, branding e identidade visual │ ├── src/ │ ├── server.js # Servidor Express, middlewares e CORS │ ├── config.js # Validação de variáveis de ambiente │ ├── ai/ # Agente LLM, prompt engineering e tools │ ├── db/ # Schema DDL, migrações e seed │ ├── services/ # Motor de agendamento (Single Source of Truth) │ ├── routes/ # Rotas públicas, administrativas e webhooks │ └── lib/ # Utilitários de tempo, telefone e eventos SSE │ ├── package.json └── .env.example
+
+
+---
+
+## 📡 Endpoints da API REST
+
+### 🌐 Rotas Públicas (Website)
+| Método | Endpoint | Descrição |
+| :---: | :--- | :--- |
+| `GET` | `/api/servicos` | Lista serviços cadastrados, duração e preços |
+| `GET` | `/api/barbeiros` | Lista profissionais e dias de expediente |
+| `GET` | `/api/horarios-disponiveis` | Grade de horários com checagem de vagas livres |
+| `POST`| `/api/agendamentos` | Criação de novo agendamento com validação |
+| `GET` | `/api/eventos` | Stream SSE de atualizações da agenda |
+
+### 🤖 Rotas Internas (Agente de IA) — `X-Internal-Token`
+| Método | Endpoint | Descrição |
+| :---: | :--- | :--- |
+| `GET` | `/api/interno/clientes/:whatsapp` | Perfil do cliente e histórico de agendamentos |
+| `POST`| `/api/interno/agendamentos` | Agendamento via assistente de voz/texto |
+| `PATCH`| `/api/interno/agendamentos/:id/remarcar`| Remarcação de horário com validação de vagas |
+| `PATCH`| `/api/interno/agendamentos/:id/cancelar`| Cancelamento de horário e liberação da vaga |
+
+### 🛡️ Rotas Administrativas — `Authorization: Bearer <ADMIN_TOKEN>`
+| Método | Endpoint | Descrição |
+| :---: | :--- | :--- |
+| `GET` | `/admin/relatorio-diario` | Faturamento, atendimentos concluídos e métricas |
+| `GET` | `/admin/relatorio-diario?formato=csv` | Exportação de planilha formatada em CSV (Excel UTF-8) |
+| `PATCH`| `/admin/agendamentos/:id/status` | Marcação de status (concluído, cancelado, falta) |
+
+---
+
+## 🚀 Como Executar o Projeto
+
+### Pré-requisitos
+* **Node.js 22.13+** instalado.
+
+### Passo a Passo
 
 ```bash
+# 1. Clone o repositório
+git clone https://github.com/caiodantass/Barber-AI-Booking-Platform.git
+cd Barber-AI-Booking-Platform
+
+# 2. Instale as dependências
 npm install
-cp .env.example .env        # no Windows: copy .env.example .env
-npm run seed                # serviços, 2 barbeiros, expediente (idempotente)
-npm run dev                 # http://localhost:3000
+
+# 3. Configure as variáveis de ambiente
+cp .env.example .env
+
+# 4. Popule o banco de dados com dados iniciais
+npm run seed
+
+# 5. Inicie o servidor de desenvolvimento
+npm run dev
 ```
 
-| URL | O quê |
-|---|---|
-| `http://localhost:3000` | Site |
-| `http://localhost:3000/painel` | Painel admin (token = `ADMIN_TOKEN`) |
+Acesse as interfaces:
 
-## ⚙️ Variáveis de ambiente (`.env`)
-
-| Variável | Para quê |
-|---|---|
-| `PORT`, `API_BASE_URL` | Porta e URL onde a própria API responde (a IA chama a API por ela) |
-| `DB_PATH` | Arquivo SQLite (padrão `./data/fiofino.db`) |
-| `TZ_BARBEARIA` | `America/Fortaleza` (Campina Grande, UTC-3) |
-| `SLOT_MINUTOS` | Intervalo entre horários exibidos (30) |
-| `JANELA_DIAS` | Até quantos dias à frente aceitar agendamento (30) |
-| `ANTECEDENCIA_MIN_MINUTOS` | Antecedência mínima (30) |
-| `MAX_AGENDAMENTOS_FUTUROS_POR_CLIENTE` | Anti-abuso (3) |
-| `ADMIN_TOKEN` | Acesso ao painel e `/admin/*` — **troque!** |
-| `INTERNAL_API_TOKEN` | Acesso da IA a `/api/interno/*` — **troque!** |
-| `WA_VERIFY_TOKEN`, `WA_APP_SECRET`, `WA_ACCESS_TOKEN`, `WA_PHONE_NUMBER_ID` | WhatsApp Cloud API (Meta) |
-| `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` | Provedor de IA (ver abaixo) |
-
-## 🎨 Personalização
-
-- **Telefones, Instagram, endereço, número da IA:** `public/js/config.js` (site) e `src/config.js` (IA).
-- **Serviços, preços, barbeiros, expediente:** `src/db/seed.js` (rodar antes do primeiro uso) ou direto no banco.
-- **Avaliações:** placeholders em `public/index.html`, seção `#avaliacoes`.
-- **Fotos dos barbeiros:** coluna `barbeiros.foto_url` (sem foto, aparece a inicial).
+Site do Cliente: [http://localhost:3000](http://localhost:3000)
+Painel Administrativo: [http://localhost:3000](http://localhost:3000/painel)
 
 ---
 
-## 📡 API REST
+🧪 Teste Rápido do Agente de IA (Sem Webhook da Meta)
 
-### Pública (site)
-| Método | Rota | Descrição |
-|---|---|---|
-| GET | `/api/servicos` | Serviços com `preco_centavos` e `duracao_min` |
-| GET | `/api/barbeiros` | Profissionais e `dias_atendimento` |
-| GET | `/api/horarios-disponiveis?barbeiro_id&servico_id&data` | Grade do dia com `disponivel: true/false` |
-| POST | `/api/agendamentos` | `{ nome, whatsapp, barbeiro_id, servico_id, inicio: "2026-11-05T08:00" }` |
-| GET | `/api/eventos` | Stream SSE de mudanças na agenda (sem dados pessoais) |
+Você pode simular conversas reais da IA enviando requisições locais:
 
-Erros seguem `{ erro: { codigo, mensagem, detalhes } }` — ex.: `409 HORARIO_INDISPONIVEL` traz `detalhes.alternativas`.
-
-### Interna (IA) — header `X-Internal-Token`
-| Método | Rota |
-|---|---|
-| GET | `/api/interno/clientes/:whatsapp` — cliente + próximos agendamentos |
-| POST | `/api/interno/agendamentos` |
-| PATCH | `/api/interno/agendamentos/:id/remarcar` — `{ whatsapp, inicio, barbeiro_id?, servico_id? }` |
-| PATCH | `/api/interno/agendamentos/:id/cancelar` — `{ whatsapp, motivo? }` |
-
-### Admin — header `Authorization: Bearer <ADMIN_TOKEN>`
-| Método | Rota |
-|---|---|
-| GET | `/admin/relatorio-diario?data=AAAA-MM-DD` → `clientes_atendidos`, `faturamento_total_centavos` + detalhes |
-| GET | `/admin/relatorio-diario?data=...&formato=csv` → planilha (`;` + UTF-8 BOM, abre direto no Excel) |
-| GET | `/admin/agendamentos?data=...` |
-| PATCH | `/admin/agendamentos/:id/status` — `{ status: "concluido", forma_pagamento: "pix" }` |
-
-> **Regra do relatório:** só atendimentos marcados como **Concluído** no painel entram em "clientes atendidos" e "faturamento". O relatório também mostra a receita *prevista* (confirmados) e faltas/cancelamentos.
-
----
-
-## 🤖 Secretária Virtual (WhatsApp + IA)
-
-`src/ai/secretaria.js` usa **LLM com tool calling**. A cada mensagem:
-
-1. Identifica o cliente pelo número do remetente (normalizado — trata o `wa_id` da Meta que vem sem o 9º dígito).
-2. Injeta no prompt: data/hora atual, calendário dos próximos 14 dias (para entender "terça", "amanhã"), cadastro e agendamentos **ao vivo**.
-3. O LLM chama ferramentas (`consultar_horarios`, `criar_agendamento`, `remarcar_agendamento`, `cancelar_agendamento`, …) que batem na API REST.
-4. O WhatsApp **nunca** é parâmetro do LLM: o servidor injeta o do remetente, então ninguém mexe em agendamento alheio.
-
-Exemplo: *"passa minha terça pra quarta às 8h"* → `meus_agendamentos` → `consultar_horarios(quarta)` → `remarcar_agendamento` → confirmação. O site libera a terça e bloqueia a quarta no mesmo instante.
-
-### Provedor de LLM (qualquer endpoint compatível com OpenAI)
-```env
-# OpenAI
-LLM_BASE_URL=https://api.openai.com/v1
-LLM_MODEL=gpt-4o-mini
-# Google Gemini
-LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
-LLM_MODEL=gemini-2.0-flash
-```
-Sem `LLM_API_KEY`, a secretária entra em modo degradado: cumprimenta pelo nome, informa o próximo horário e indica site/telefones.
-
-### Testar sem a Meta
 ```bash
-curl -X POST http://localhost:3000/webhook/simular -H "Content-Type: application/json" \
-  -d '{"whatsapp":"83988887777","texto":"Quero cortar amanhã de manhã","nome":"João"}'
-```
-(PowerShell: `Invoke-RestMethod -Method Post -Uri http://localhost:3000/webhook/simular -ContentType 'application/json' -Body '{"whatsapp":"83988887777","texto":"oi"}'`)
-
-Disponível só com `NODE_ENV` diferente de `production`.
-
-### Conectar ao WhatsApp de verdade
-1. Crie um app em [developers.facebook.com](https://developers.facebook.com) → produto **WhatsApp** → copie `WA_PHONE_NUMBER_ID` e gere um token permanente (`WA_ACCESS_TOKEN`) via usuário de sistema.
-2. Exponha o servidor em HTTPS (deploy ou `ngrok http 3000` para testes).
-3. Em *Webhooks*, URL `https://SEU_DOMINIO/webhook/whatsapp`, token = `WA_VERIFY_TOKEN`, assine o campo **messages**.
-4. Defina `WA_APP_SECRET` (valida a assinatura `X-Hub-Signature-256` — obrigatório em produção).
-
-O webhook responde 200 na hora, ignora reentregas (`mensagens_processadas`) e processa mensagens do mesmo número em fila, em ordem.
-
----
-
-## 🗄️ Banco de dados
-
-`src/db/schema.sql` — dinheiro em **centavos**, horários locais `AAAA-MM-DDTHH:MM`.
-
-| Tabela | Papel |
-|---|---|
-| `clientes` | PK = WhatsApp normalizado (`5583988887777`) |
-| `barbeiros`, `expedientes`, `bloqueios` | Profissionais, turnos semanais, folgas/feriados |
-| `servicos` | Catálogo e preço vigente |
-| `agendamentos` | **Snapshot** de nome/valor/duração do serviço no ato do agendamento; índice único parcial impede double-booking |
-| `agendamento_eventos` | Auditoria: quem criou/remarcou/cancelou e por qual canal |
-| `conversas_ia`, `mensagens_processadas` | Memória da IA e idempotência do webhook |
-
-### Preparado para o futuro módulo financeiro
-- `lancamentos_financeiros` — livro-caixa único. Um **trigger** lança a receita automaticamente quando o atendimento é concluído (e estorna se for desfeito). O futuro site só precisa lançar as **despesas**.
-- `categorias_financeiras`, `metas_mensais` (faturamento, atendimentos, lucro líquido — por barbearia ou por barbeiro), `barbeiros.comissao_percentual`, `agendamentos.forma_pagamento`.
-- `vw_resumo_diario` — visão pronta para dashboards.
-
-Lucro líquido do mês, por exemplo:
-```sql
-SELECT SUM(CASE tipo WHEN 'receita' THEN valor_centavos ELSE -valor_centavos END) / 100.0
-FROM lancamentos_financeiros WHERE data_competencia LIKE '2026-11-%';
+curl -X POST http://localhost:3000/webhook/simular \
+  -H "Content-Type: application/json" \
+  -d '{"whatsapp":"5583988887777","texto":"Quero cortar cabelo amanhã de manhã","nome":"João"}'
 ```
 
----
+--- 
 
-## 🏗️ Estrutura
+## 👨‍💻 Autor
 
-```
-public/
-  index.html  painel.html
-  css/style.css  css/painel.css
-  js/config.js  js/app.js  js/painel.js
-  assets/  (logo e identidade visual)
-src/
-  server.js  config.js
-  db/        index.js  schema.sql  seed.js
-  services/  agenda.js          ← regras de negócio (fonte única)
-  routes/    publicas.js  internas.js  admin.js  webhook.js
-  ai/        secretaria.js  apiClient.js  whatsapp.js
-  lib/       tempo.js  telefone.js  realtime.js  http.js  erros.js
-```
-
-## 📈 Escalando
-
-O processo único com SQLite síncrono serializa as escritas: não há corrida entre site e WhatsApp, e isso atende tranquilamente uma barbearia. Para várias instâncias: PostgreSQL (o schema é quase todo portável; use `EXCLUDE USING gist` para sobreposição) + Redis Pub/Sub ou `LISTEN/NOTIFY` no lugar do Set do SSE.
-
-## ✅ Antes de ir para produção
-- [ ] Trocar `ADMIN_TOKEN` e `INTERNAL_API_TOKEN` por valores longos e aleatórios
-- [ ] `NODE_ENV=production` e `WA_APP_SECRET` definido
-- [ ] Dados reais em `public/js/config.js`, `src/config.js` e `src/db/seed.js`
-- [ ] HTTPS (Nginx/Caddy) — o SSE já envia `X-Accel-Buffering: no`
-- [ ] Backup diário de `data/fiofino.db`
+**Caio Dantas**  
+* Engenheiro de Software / Desenvolvedor de Firmware  
+* GitHub: [@caiodantass](https://github.com/caiodantass)  
+* LinkedIn: [linkedin.com/in/caiodantass](https://www.linkedin.com/in/caio-l%C3%ADvio/)
