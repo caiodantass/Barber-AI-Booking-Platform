@@ -165,10 +165,6 @@ function renderTabelaServicos() {
         </div>
         ${s.descricao ? `<p class="servico__desc">${esc(s.descricao)}</p>` : ''}
       </div>
-      <div class="menu-item__preco">
-        ${s.preco_a_partir ? '<span class="servico__apartir">a partir de</span>' : ''}
-        <span class="servico__preco">${reais(s.preco_centavos)}</span>
-      </div>
     </div>`).join('');
 }
 
