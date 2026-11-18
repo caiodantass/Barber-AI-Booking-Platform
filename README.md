@@ -1,4 +1,4 @@
-# ✂️ Barber AI Booking Platform — Intelligent Scheduling Ecosystem
+# Barber AI Booking Platform — Intelligent Scheduling Ecosystem
 
 [![Node.js](https://img.shields.io/badge/Node.js-22.13%2B-339933.svg?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![Express](https://img.shields.io/badge/Backend-Express.js-000000.svg?logo=express)](https://expressjs.com/)
