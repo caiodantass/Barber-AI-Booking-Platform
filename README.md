@@ -13,7 +13,7 @@ Projetado com arquitetura *passwordless*: o **número de WhatsApp validado do cl
 
 ---
 
-## 🏗️ Arquitetura do Sistema
+## Arquitetura do Sistema
 
 ```mermaid
 flowchart LR
@@ -29,7 +29,7 @@ flowchart LR
     SSE -->|Sync em Tempo Real| Painel
 ```
 
-### ⚡ Destaques de Engenharia e Concorrência
+### Destaques de Engenharia e Concorrência
 
 * **Sincronização Bidirecional em Tempo Real via SSE**: Qualquer alteração na grade (feita no site, pelo WhatsApp ou no painel) dispara um evento **Server-Sent Events**. O site e o painel admin atualizam a disponibilidade dos barbeiros instantaneamente sem recarregar a página.
 * **Prevenção Concorrente de Double-Booking**: Regras unificadas em `services/agenda.js` com transações seriais que impedem marcações duplicadas no mesmo horário, mesmo que múltiplos clientes ou a IA tentem agendar simultaneamente.
@@ -40,16 +40,16 @@ flowchart LR
 
 ---
 
-## 📁 Estrutura do Projeto
+## Estrutura do Projeto
 
 Barber-AI-Booking-Platform/ ├── public/ │ ├── index.html # Interface do cliente (Mobile-First) │ ├── painel.html # Dashboard administrativo │ ├── css/ # Estilização com Dark Neon e Glassmorphism │ ├── js/ # Camada cliente e listeners de SSE │ └── assets/ # Imagens, branding e identidade visual │ ├── src/ │ ├── server.js # Servidor Express, middlewares e CORS │ ├── config.js # Validação de variáveis de ambiente │ ├── ai/ # Agente LLM, prompt engineering e tools │ ├── db/ # Schema DDL, migrações e seed │ ├── services/ # Motor de agendamento (Single Source of Truth) │ ├── routes/ # Rotas públicas, administrativas e webhooks │ └── lib/ # Utilitários de tempo, telefone e eventos SSE │ ├── package.json └── .env.example
 
 
 ---
 
-## 📡 Endpoints da API REST
+## Endpoints da API REST
 
-### 🌐 Rotas Públicas (Website)
+### Rotas Públicas (Website)
 | Método | Endpoint | Descrição |
 | :---: | :--- | :--- |
 | `GET` | `/api/servicos` | Lista serviços cadastrados, duração e preços |
@@ -58,7 +58,7 @@ Barber-AI-Booking-Platform/ ├── public/ │ ├── index.html # Interfa
 | `POST`| `/api/agendamentos` | Criação de novo agendamento com validação |
 | `GET` | `/api/eventos` | Stream SSE de atualizações da agenda |
 
-### 🤖 Rotas Internas (Agente de IA) — `X-Internal-Token`
+### Rotas Internas (Agente de IA) — `X-Internal-Token`
 | Método | Endpoint | Descrição |
 | :---: | :--- | :--- |
 | `GET` | `/api/interno/clientes/:whatsapp` | Perfil do cliente e histórico de agendamentos |
@@ -66,7 +66,7 @@ Barber-AI-Booking-Platform/ ├── public/ │ ├── index.html # Interfa
 | `PATCH`| `/api/interno/agendamentos/:id/remarcar`| Remarcação de horário com validação de vagas |
 | `PATCH`| `/api/interno/agendamentos/:id/cancelar`| Cancelamento de horário e liberação da vaga |
 
-### 🛡️ Rotas Administrativas — `Authorization: Bearer <ADMIN_TOKEN>`
+### Rotas Administrativas — `Authorization: Bearer <ADMIN_TOKEN>`
 | Método | Endpoint | Descrição |
 | :---: | :--- | :--- |
 | `GET` | `/admin/relatorio-diario` | Faturamento, atendimentos concluídos e métricas |
@@ -75,7 +75,7 @@ Barber-AI-Booking-Platform/ ├── public/ │ ├── index.html # Interfa
 
 ---
 
-## 🚀 Como Executar o Projeto
+## Como Executar o Projeto
 
 ### Pré-requisitos
 * **Node.js 22.13+** instalado.
@@ -107,7 +107,7 @@ Painel Administrativo: [http://localhost:3000](http://localhost:3000/painel)
 
 ---
 
-🧪 Teste Rápido do Agente de IA (Sem Webhook da Meta)
+ Teste Rápido do Agente de IA (Sem Webhook da Meta)
 
 Você pode simular conversas reais da IA enviando requisições locais:
 
@@ -119,7 +119,7 @@ curl -X POST http://localhost:3000/webhook/simular \
 
 --- 
 
-## 👨‍💻 Autor
+## Autor
 
 **Caio Dantas**  
 * Engenheiro de Software / Desenvolvedor de Firmware  
